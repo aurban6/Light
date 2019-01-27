@@ -74,9 +74,9 @@ strLight_t _light2 = {2, "Ogólne prawy", _lightItem2, 1, MyMessage(2, V_DIMMER)
 strLightItem_t _lightItem3 = {2, 27, 6};
 strLightItem_t _lightItem4 = {3, 26, 8};
 strLightItem_t _lightItem5 = {4, 25, 10};
-strLightItem_t _lightItem6 = {5, 33, 12};
-//strLightItem_t _lightItem6 = {0, 0, 0};  //for RGB all value must be 0
-strLightLedRGBW_t _light3 = {3, "Szafka", {_lightItem3, _lightItem4, _lightItem5, _lightItem6}, MyMessage(3, V_RGBW)}; //definicja led RGBW (V_RGBW - RGBW, V_RGB - RGB)
+//strLightItem_t _lightItem6 = {5, 33, 12};
+strLightItem_t _lightItem6 = {0, 0, 0};  //for RGB all value must be 0
+strLightLedRGBW_t _light3 = {3, "Szafka", {_lightItem3, _lightItem4, _lightItem5, _lightItem6}, MyMessage(3, V_RGB)}; //definicja led RGBW (V_RGBW - RGBW, V_RGB - RGB)
 
 /** Definition light list **/
 #define LIGHT_SIZE 3
