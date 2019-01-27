@@ -20,7 +20,7 @@
 #define SN "Light"
 #define SV "1.0"
 
-//#define DEBUG
+#define DEBUG
 
 #define FADE_DELAY 10 //10ms = 1s
 #define LED_TIMER_BIT 8
@@ -74,9 +74,9 @@ strLight_t _light2 = {2, "Ogólne prawy", _lightItem2, 1, MyMessage(2, V_DIMMER)
 strLightItem_t _lightItem3 = {2, 27, 6};
 strLightItem_t _lightItem4 = {3, 26, 8};
 strLightItem_t _lightItem5 = {4, 25, 10};
-strLightItem_t _lightItem6 = {5, 33, 12}; //for RGB all value must be 0
-//strLightItem_t _lightItem6 = {0, 0, 0};
-strLightLedRGBW_t _light3 = {3, "Szafka", {_lightItem3, _lightItem4, _lightItem5, _lightItem6}, MyMessage(3, V_RGBW)}; //definicja led RGBW
+//strLightItem_t _lightItem6 = {5, 33, 12}; //for RGB all value must be 0
+strLightItem_t _lightItem6 = {0, 0, 0};
+strLightLedRGBW_t _light3 = {3, "Szafka", {_lightItem3, _lightItem4, _lightItem5, _lightItem6}, MyMessage(3, V_RGB)}; //definicja led RGBW
 
 /** Definition light list **/
 #define LIGHT_SIZE 3
@@ -387,9 +387,9 @@ void reciveLightRGBW(strLightLedRGBW_t &light)
     lightItem.fadeTo = target_values[i];
     saveLevelState(lightItem.eepromPos + 1, lightItem.fadeTo);
     startFade(lightItem);
-  }//
+  }
   Serial.println();
-  send(light.myMessage.set(light.rgbValue), true);
+  //send(light.myMessage.set(light.rgbValue), true);
 }
 
 void startFade(strLightItem_t &lightItem)
