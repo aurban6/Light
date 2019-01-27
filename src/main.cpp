@@ -17,333 +17,442 @@
 
 #include <MySensors.h>
 
-#define SN "AquaLed"
-#define SV "3.0"
+#define SN "Light"
+#define SV "1.0"
 
-#define FADE_DELAY 20 //10ms = 1s
+//#define DEBUG
+
+#define FADE_DELAY 10 //10ms = 1s
 #define LED_TIMER_BIT 8
 #define LED_BASE_FREQ 5000
+#define RELAY_ON 0
+#define RELAY_OFF 1
 
 typedef struct
 {
   const uint8_t channel;
   const uint8_t pin;
   const uint8_t eepromPos;
-  const char *name;
-  MyMessage myMessage;
   bool status;
   int fadeTo;
   int fadeDelta;
   int dimValue;
   unsigned long lastFadeStep;
-} strLed_t;
+} strLightItem_t;
 
-strLed_t _led0 = {0, 13, 0, "Czerwony", MyMessage(0, V_DIMMER)};
-strLed_t _led1 = {1, 12, 2, "Zielony", MyMessage(1, V_DIMMER)};
-strLed_t _led2 = {2, 14, 4, "Niebieski", MyMessage(2, V_DIMMER)};
-strLed_t _led3 = {3, 27, 6, "Biały", MyMessage(3, V_DIMMER)};
-strLed_t _led4 = {4, 26, 8, "Biały 1", MyMessage(4, V_DIMMER)};
-strLed_t _led5 = {5, 25, 10, "Biały 2", MyMessage(5, V_DIMMER)};
-strLed_t _led6 = {6, 33, 12, "Biały 3", MyMessage(6, V_DIMMER)};
-strLed_t _led7 = {7, 32, 14, "Biały 4", MyMessage(7, V_DIMMER)};
+typedef struct
+{
+  const uint8_t sensor;
+  const char *name;
+  strLightItem_t lightItem;
+  const bool dimmer;
+  MyMessage myMessage;
+} strLight_t;
 
-#define LED_SIZE 8
-static strLed_t leds[LED_SIZE] = {_led0, _led1, _led2, _led3, _led4, _led5, _led6, _led7};
+typedef struct
+{
+  const uint8_t sensor;
+  const char *name;
+  strLightItem_t lightItems[4];
+  MyMessage myMessage;
+  const char *rgbValue;
+} strLightLedRGBW_t;
 
-#define SERWIS_LED_SENSOR 20 //selector 0-off, 10-Auto, 20-Max
-MyMessage serwisLedMsg(SERWIS_LED_SENSOR, V_PERCENTAGE);
+/** Definition light **/
+strLightItem_t _lightItem0 = {0, 13, 0};
+strLight_t _light0 = {0, "Wyspa", _lightItem0, 0, MyMessage(0, V_STATUS)}; //definicja klasycznej zarowki, wlacz/wylacz
 
-void setupLed(strLed_t &led);
-void setupWebServer();
-void startFade(strLed_t &led);
+/** Definition led W **/
+strLightItem_t _lightItem1 = {0, 12, 2};
+strLight_t _light1 = {1, "Ogólne lewy", _lightItem1, 1, MyMessage(1, V_DIMMER)}; //definicja pojedynczego leda z sciemnianiem
+
+/** Definition led W **/
+strLightItem_t _lightItem2 = {1, 14, 4};
+strLight_t _light2 = {2, "Ogólne prawy", _lightItem2, 1, MyMessage(2, V_DIMMER)}; //definicja pojedynczego leda z sciemnianiem
+
+/** Definition led RGBW **/
+strLightItem_t _lightItem3 = {2, 27, 6};
+strLightItem_t _lightItem4 = {3, 26, 8};
+strLightItem_t _lightItem5 = {4, 25, 10};
+strLightItem_t _lightItem6 = {5, 33, 12}; //for RGB all value must be 0
+//strLightItem_t _lightItem6 = {0, 0, 0};
+strLightLedRGBW_t _light3 = {3, "Szafka", {_lightItem3, _lightItem4, _lightItem5, _lightItem6}, MyMessage(3, V_RGBW)}; //definicja led RGBW
+
+/** Definition light list **/
+#define LIGHT_SIZE 3
+strLight_t _lights[LIGHT_SIZE] = {_light0, _light1, _light2}; //lista oswietlenia typu pojedyncze (zarowki, led)
+
+/** Definition light RGBW list **/
+#define LIGHT_RGBW_SIZE 1
+strLightLedRGBW_t _lightRGBWs[LIGHT_RGBW_SIZE] = {_light3}; //lista oswietlenia typu RGB, RGBW
+
+/** BODY **/
+void setupLight(strLight_t &light);
+void setupLightRGBW(strLightLedRGBW_t &light);
+
+void presentationLight(strLight_t &light);
+void presentationLightRGBW(strLightLedRGBW_t &light);
+
+void reciveLightDimmer(strLightItem_t &lightItem, MyMessage message);
+void reciveLightRGBW(strLightLedRGBW_t &light);
+
+void startFade(strLightItem_t &lightItem);
 void fadeStep();
-void setSerwisLed(byte value);
+void fadeRGBWStep();
+
+byte fromhex(const char *str);
 int loadLevelState(byte pos);
 void saveLevelState(byte pos, byte data);
 
-/*
- * Web Update
- */
-const char *host = MY_HOSTNAME;
-const char *ssid = MY_WIFI_SSID;
-const char *password = MY_WIFI_PASSWORD;
-
-WebServer server(80);
-
-const char *loginIndex =
-    "<form name='loginForm'>"
-    "<table width='20%' bgcolor='A09F9F' align='center'>"
-    "<tr>"
-    "<td colspan=2>"
-    "<center><font size=4><b>ESP32 Login Page</b></font></center>"
-    "<br>"
-    "</td>"
-    "<br>"
-    "<br>"
-    "</tr>"
-    "<td>Username:</td>"
-    "<td><input type='text' size=25 name='userid'><br></td>"
-    "</tr>"
-    "<br>"
-    "<br>"
-    "<tr>"
-    "<td>Password:</td>"
-    "<td><input type='Password' size=25 name='pwd'><br></td>"
-    "<br>"
-    "<br>"
-    "</tr>"
-    "<tr>"
-    "<td><input type='submit' onclick='check(this.form)' value='Login'></td>"
-    "</tr>"
-    "</table>"
-    "</form>"
-    "<script>"
-    "function check(form)"
-    "{"
-    "if(form.userid.value=='aurban6' && form.pwd.value=='aurban123')"
-    "{"
-    "window.open('/serverIndex')"
-    "}"
-    "else"
-    "{"
-    " alert('Error Password or Username')/*displays error message*/"
-    "}"
-    "}"
-    "</script>";
-
-/*
- * Server Index Page
- */
-const char *serverIndex =
-    "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
-    "<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
-    "<input type='file' name='update'>"
-    "<input type='submit' value='Update'>"
-    "</form>"
-    "<div id='prg'>progress: 0%</div>"
-    "<script>"
-    "$('form').submit(function(e){"
-    "e.preventDefault();"
-    "var form = $('#upload_form')[0];"
-    "var data = new FormData(form);"
-    " $.ajax({"
-    "url: '/update',"
-    "type: 'POST',"
-    "data: data,"
-    "contentType: false,"
-    "processData:false,"
-    "xhr: function() {"
-    "var xhr = new window.XMLHttpRequest();"
-    "xhr.upload.addEventListener('progress', function(evt) {"
-    "if (evt.lengthComputable) {"
-    "var per = evt.loaded / evt.total;"
-    "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
-    "}"
-    "}, false);"
-    "return xhr;"
-    "},"
-    "success:function(d, s) {"
-    "console.log('success!')"
-    "},"
-    "error: function (a, b, c) {"
-    "}"
-    "});"
-    "});"
-    "</script>";
-
 void setup()
 {
-  for (int i = 0; i < LED_SIZE; i++)
+#ifdef DEBUG
+  Serial.println();
+  Serial.println("SETUP");
+#endif
+  //setup for Led dimmer, Light
+  for (int i = 0; i < LIGHT_SIZE; i++)
   {
-    setupLed(leds[i]);
+    setupLight(_lights[i]);
   }
-  setupWebServer();
+  //setup for RGB, RGBW Led
+  for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
+  {
+    setupLightRGBW(_lightRGBWs[i]);
+  }
 }
 
 void presentation()
 {
-  for (int i = 0; i < LED_SIZE; i++)
+  //presentation for Led dimmer, Light
+  for (int i = 0; i < LIGHT_SIZE; i++)
   {
-    strLed_t &led = leds[i];
-    present(led.channel, S_DIMMER, led.name);
+    presentationLight(_lights[i]);
   }
-  present(SERWIS_LED_SENSOR, S_DIMMER, "Led akwarium");
+  //presentation for RGB, RGBW Led
+  for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
+  {
+    presentationLightRGBW(_lightRGBWs[i]);
+  }
   sendSketchInfo(SN, SV);
+}
+
+void receive(const MyMessage &message)
+{
+#ifdef DEBUG
+  Serial.println();
+  Serial.println("RECIVE");
+#endif
+  //recive for Led dimmer, Light
+  for (int i = 0; i < LIGHT_SIZE; i++)
+  {
+    strLight_t &light = _lights[i];
+    if (message.sensor == light.sensor)
+    {
+#ifdef DEBUG
+      Serial.print("    ");
+      Serial.print(light.name);
+      Serial.print(": sensor=");
+      Serial.print(light.sensor);
+      Serial.print(", dimmer=");
+      Serial.println(light.dimmer);
+#endif
+      strLightItem_t &lightItem = light.lightItem;
+      if (light.dimmer)
+      {
+        reciveLightDimmer(lightItem, message);
+        return;
+      }
+      else
+      {
+        lightItem.status = message.getBool();
+        saveLevelState(lightItem.eepromPos, lightItem.status);
+        digitalWrite(lightItem.pin, lightItem.status ? RELAY_ON : RELAY_OFF);
+        send(light.myMessage.set(lightItem.status), true);
+#ifdef DEBUG
+        Serial.print("        Item: pin=");
+        Serial.print(lightItem.pin);
+        Serial.print(", status=");
+        Serial.println(lightItem.status);
+#endif
+        return;
+      }
+    }
+  }
+  //recive for RGB, RGBW Led
+  for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
+  {
+    strLightLedRGBW_t &light = _lightRGBWs[i];
+    if (message.sensor == light.sensor)
+    {
+#ifdef DEBUG
+      Serial.print("    ");
+      Serial.print(light.name);
+      Serial.print(": sensor=");
+      Serial.println(light.sensor);
+#endif
+      byte type = light.lightItems[3].channel == 0 && light.lightItems[3].pin == 0;
+      byte size = type ? 3 : 4;
+      if (message.type == V_LIGHT)
+      {
+        for (int j = 0; j < size; j++)
+        {
+          strLightItem_t &lightItem = light.lightItems[j];
+          reciveLightDimmer(lightItem, message);
+        }
+        return;
+      }
+      else if (message.type == type ? V_RGB : V_RGBW)
+      {
+        light.rgbValue = message.getString();
+        reciveLightRGBW(light);
+        return;
+      }
+    }
+  }
 }
 
 void loop()
 {
   fadeStep();
-  server.handleClient();
+  fadeRGBWStep();
 }
 
-void receive(const MyMessage &message)
+void setupLight(strLight_t &light)
 {
-  switch (message.sensor)
+#ifdef DEBUG
+  Serial.print("    ");
+  Serial.print(light.name);
+  Serial.print(": sensor=");
+  Serial.print(light.sensor);
+  Serial.print(", dimmer=");
+  Serial.println(light.dimmer);
+#endif
+  strLightItem_t &lightItem = light.lightItem;
+  if (light.dimmer)
   {
-  case SERWIS_LED_SENSOR:
-    setSerwisLed(message.getByte());
-    break;
-  default:
-    for (int i = 0; i < LED_SIZE; i++)
+    lightItem.status = loadLevelState(lightItem.eepromPos);
+    lightItem.fadeTo = loadLevelState(lightItem.eepromPos + 1);
+    ledcSetup(lightItem.channel, LED_BASE_FREQ, LED_TIMER_BIT);
+    ledcAttachPin(lightItem.pin, lightItem.channel);
+    if (!lightItem.status)
     {
-      strLed_t &led = leds[i];
-      if (led.channel == message.sensor)
-      {
-        if (message.type == V_LIGHT)
-        {
-          led.fadeTo = message.getBool() ? loadLevelState(led.eepromPos + 1) : 0;
-          saveLevelState(led.eepromPos, message.getBool());
-        }
-        else if (message.type == V_DIMMER)
-        {
-          led.fadeTo = message.getByte();
-          saveLevelState(led.eepromPos + 1, led.fadeTo);
-        }
-        startFade(led);
-        return;
-      }
+      lightItem.dimValue = 0;
+      lightItem.fadeTo = 0;
     }
-    break;
+#ifdef DEBUG
+    Serial.print("        Item: pin=");
+    Serial.print(lightItem.pin);
+    Serial.print(", channel=");
+    Serial.print(lightItem.channel);
+    Serial.print(", status=");
+    Serial.print(lightItem.status);
+    Serial.print(", fadeTo=");
+    Serial.print(lightItem.fadeTo);
+    Serial.print(", dimValue=");
+    Serial.println(lightItem.dimValue);
+#endif
+    startFade(lightItem);
+  }
+  else
+  {
+    lightItem.status = loadLevelState(lightItem.eepromPos);
+    pinMode(lightItem.pin, OUTPUT);
+    digitalWrite(lightItem.pin, lightItem.status ? RELAY_ON : RELAY_OFF);
+#ifdef DEBUG
+    Serial.print("        Item: pin=");
+    Serial.print(lightItem.pin);
+    Serial.print(", status=");
+    Serial.println(lightItem.status);
+#endif
   }
 }
 
-void setupLed(strLed_t &led)
+void setupLightRGBW(strLightLedRGBW_t &light)
 {
-  led.status = loadLevelState(led.eepromPos);
-  led.fadeTo = loadLevelState(led.eepromPos + 1);
-  ledcSetup(led.channel, LED_BASE_FREQ, LED_TIMER_BIT);
-  ledcAttachPin(led.pin, led.channel);
-  if (!led.status)
+#ifdef DEBUG
+  Serial.print("    ");
+  Serial.print(light.name);
+  Serial.print(": sensor=");
+  Serial.println(light.sensor);
+#endif
+  byte size = light.lightItems[3].channel == 0 && light.lightItems[3].pin == 0 ? 3 : 4;
+  for (int i = 0; i < size; i++)
   {
-    led.dimValue = 0;
-    led.fadeTo = 0;
-  }
-  startFade(led);
-}
-
-void setupWebServer()
-{
-  // Connect to WiFi network
-  WiFi.begin(ssid, password);
-  Serial.println("");
-
-  // Wait for connection
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-
-  /*use mdns for host name resolution*/
-  if (!MDNS.begin(host))
-  { //http://esp32.local
-    Serial.println("Error setting up MDNS responder!");
-    while (1)
+    strLightItem_t &lightItem = light.lightItems[i];
+    lightItem.status = loadLevelState(lightItem.eepromPos);
+    lightItem.fadeTo = loadLevelState(lightItem.eepromPos + 1);
+    ledcSetup(lightItem.channel, LED_BASE_FREQ, LED_TIMER_BIT);
+    ledcAttachPin(lightItem.pin, lightItem.channel);
+    if (!lightItem.status)
     {
-      delay(1000);
+      lightItem.dimValue = 0;
+      lightItem.fadeTo = 0;
     }
+#ifdef DEBUG
+    Serial.print("        Item: pin=");
+    Serial.print(lightItem.pin);
+    Serial.print(", channel=");
+    Serial.print(lightItem.channel);
+    Serial.print(", status=");
+    Serial.print(lightItem.status);
+    Serial.print(", fadeTo=");
+    Serial.print(lightItem.fadeTo);
+    Serial.print(", dimValue=");
+    Serial.println(lightItem.dimValue);
+#endif
+    startFade(lightItem);
   }
-  Serial.println("mDNS responder started");
-  /*return index page which is stored in serverIndex */
-  server.on("/", HTTP_GET, []() {
-    server.sendHeader("Connection", "close");
-    server.send(200, "text/html", loginIndex);
-  });
-  server.on("/serverIndex", HTTP_GET, []() {
-    server.sendHeader("Connection", "close");
-    server.send(200, "text/html", serverIndex);
-  });
-  /*handling uploading firmware file */
-  server.on("/update", HTTP_POST, []() {
-    server.sendHeader("Connection", "close");
-    server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
-    ESP.restart(); }, []() {
-    HTTPUpload& upload = server.upload();
-    if (upload.status == UPLOAD_FILE_START) {
-      Serial.printf("Update: %s\n", upload.filename.c_str());
-      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
-        Update.printError(Serial);
-      }
-    } else if (upload.status == UPLOAD_FILE_WRITE) {
-      /* flashing firmware to ESP*/
-      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-        Update.printError(Serial);
-      }
-    } else if (upload.status == UPLOAD_FILE_END) {
-      if (Update.end(true)) { //true to set the size to the current progress
-        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
-      } else {
-        Update.printError(Serial);
-      }
-    } });
-  server.begin();
 }
 
-void startFade(strLed_t &led)
+void presentationLight(strLight_t &light)
 {
-  led.fadeDelta = (led.fadeTo - led.dimValue) < 0 ? -1 : 1;
-  led.lastFadeStep = millis();
+  present(light.sensor, light.dimmer ? S_DIMMER : S_BINARY, light.name);
+}
+
+void presentationLightRGBW(strLightLedRGBW_t &light)
+{
+  byte type = light.lightItems[3].channel == 0 && light.lightItems[3].pin == 0;
+  present(light.sensor, type ? S_RGB_LIGHT : S_RGBW_LIGHT, light.name);
+}
+
+void reciveLightDimmer(strLightItem_t &lightItem, MyMessage message)
+{
+  if (message.type == V_LIGHT)
+  {
+    lightItem.fadeTo = message.getBool() ? loadLevelState(lightItem.eepromPos + 1) : 0;
+    lightItem.status = message.getBool();
+    saveLevelState(lightItem.eepromPos, lightItem.status);
+  }
+  else if (message.type == V_DIMMER)
+  {
+    lightItem.fadeTo = message.getByte();
+    saveLevelState(lightItem.eepromPos + 1, lightItem.fadeTo);
+  }
+#ifdef DEBUG
+  Serial.print("        Item: pin=");
+  Serial.print(lightItem.pin);
+  Serial.print(", channel=");
+  Serial.print(lightItem.channel);
+  Serial.print(", status=");
+  Serial.print(lightItem.status);
+  Serial.print(", fadeTo=");
+  Serial.println(lightItem.fadeTo);
+#endif
+  startFade(lightItem);
+}
+
+void reciveLightRGBW(strLightLedRGBW_t &light)
+{
+  byte target_values[4] = {0, 0, 0, 0};
+#ifdef DEBUG
+  Serial.print("        color=");
+  Serial.print(light.rgbValue);
+  Serial.print(", length=");
+  Serial.print(strlen(light.rgbValue));
+  Serial.print(", RGBW=");
+#endif
+  if (strlen(light.rgbValue) == 6)
+  {
+    target_values[0] = fromhex(&light.rgbValue[0]);
+    target_values[1] = fromhex(&light.rgbValue[2]);
+    target_values[2] = fromhex(&light.rgbValue[4]);
+    target_values[3] = 0;
+  }
+  else if (strlen(light.rgbValue) == 9)
+  {
+    target_values[0] = fromhex(&light.rgbValue[1]); // ignore # as first sign
+    target_values[1] = fromhex(&light.rgbValue[3]);
+    target_values[2] = fromhex(&light.rgbValue[5]);
+    target_values[3] = fromhex(&light.rgbValue[7]);
+  }
+  else
+  {
+#ifdef DEBUG
+    Serial.println("Wrong length of input");
+#endif
+    return;
+  }
+  byte start = 0;
+  if (strlen(light.rgbValue) == 9) start = 3;
+  byte size = light.lightItems[3].channel == 0 && light.lightItems[3].pin == 0 ? 3 : 4;
+  for (int i = start; i < size; i++)
+  {
+#ifdef DEBUG
+    Serial.print(target_values[i]);
+    if (i < size - 1)
+      Serial.print(", ");
+#endif
+    strLightItem_t &lightItem = light.lightItems[i];
+    lightItem.fadeTo = target_values[i];
+    saveLevelState(lightItem.eepromPos + 1, lightItem.fadeTo);
+    startFade(lightItem);
+  }//
+  Serial.println();
+  send(light.myMessage.set(light.rgbValue), true);
+}
+
+void startFade(strLightItem_t &lightItem)
+{
+  lightItem.fadeDelta = (lightItem.fadeTo - lightItem.dimValue) < 0 ? -1 : 1;
+  lightItem.lastFadeStep = millis();
 }
 
 void fadeStep()
 {
-  for (int i = 0; i < LED_SIZE; i++)
+  for (int i = 0; i < LIGHT_SIZE; i++)
   {
-    strLed_t &led = leds[i];
-    unsigned long currentTime = millis();
-    if (led.dimValue != led.fadeTo && currentTime > led.lastFadeStep + FADE_DELAY)
+    strLight_t &light = _lights[i];
+    if (light.dimmer)
     {
-      led.dimValue += led.fadeDelta;
-      uint32_t duty = (led.dimValue / 100. * 256);
-      ledcWrite(led.channel, duty);
-      led.lastFadeStep = currentTime;
-
-      if (led.fadeTo == led.dimValue)
+      strLightItem_t &lightItem = light.lightItem;
+      unsigned long currentTime = millis();
+      if (lightItem.dimValue != lightItem.fadeTo && currentTime > lightItem.lastFadeStep + FADE_DELAY)
       {
-        send(led.myMessage.set(led.dimValue), true);
+        lightItem.dimValue += lightItem.fadeDelta;
+        uint32_t duty = (lightItem.dimValue / 100. * 256);
+        ledcWrite(lightItem.channel, duty);
+        lightItem.lastFadeStep = currentTime;
+
+        if (lightItem.fadeTo == lightItem.dimValue)
+        {
+          send(light.myMessage.set(lightItem.dimValue), true);
+        }
       }
     }
   }
 }
 
-void setSerwisLed(byte value)
+void fadeRGBWStep()
 {
-  switch (value)
+  for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
   {
-  case 0: // Off
-    for (int i = 0; i < LED_SIZE; i++)
+    strLightLedRGBW_t &light = _lightRGBWs[i];
+    byte size = light.lightItems[3].channel == 0 && light.lightItems[3].pin == 0 ? 3 : 4;
+    for (int j = 0; j < size; j++)
     {
-      strLed_t &led = leds[i];
-      led.fadeTo = 0;
-      saveLevelState(led.eepromPos, 0);
-      startFade(led);
+      strLightItem_t &lightItem = light.lightItems[j];
+      unsigned long currentTime = millis();
+      if (lightItem.dimValue != lightItem.fadeTo && currentTime > lightItem.lastFadeStep + FADE_DELAY)
+      {
+        lightItem.dimValue += lightItem.fadeDelta;
+        ledcWrite(lightItem.channel, lightItem.dimValue);
+        lightItem.lastFadeStep = currentTime;
+      }
     }
-    break;
-  case 10: //Auto
-    for (int i = 0; i < LED_SIZE; i++)
-    {
-      strLed_t &led = leds[i];
-      led.fadeTo = loadLevelState(led.eepromPos + 1);
-      saveLevelState(led.eepromPos, 1);
-      startFade(led);
-    }
-    break;
-  case 20: //Max
-    for (int i = 0; i < LED_SIZE; i++)
-    {
-      strLed_t &led = leds[i];
-      led.fadeTo = 100;
-      startFade(led);
-    }
-    break;
   }
-  send(serwisLedMsg.set(value));
+}
+
+byte fromhex(const char *str)
+{
+  char c = str[0] - '0';
+  if (c > 9)
+    c -= 7;
+  int result = c;
+  c = str[1] - '0';
+  if (c > 9)
+    c -= 7;
+  return (result << 4) | c;
 }
 
 int loadLevelState(byte pos)
