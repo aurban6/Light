@@ -20,7 +20,7 @@
 #define SN "Light"
 #define SV "1.0"
 
-#define DEBUG
+//#define DEBUG
 
 #define FADE_DELAY 10 //10ms = 1s
 #define LED_TIMER_BIT 8
@@ -74,9 +74,9 @@ strLight_t _light2 = {2, "Ogólne prawy", _lightItem2, 1, MyMessage(2, V_DIMMER)
 strLightItem_t _lightItem3 = {2, 27, 6};
 strLightItem_t _lightItem4 = {3, 26, 8};
 strLightItem_t _lightItem5 = {4, 25, 10};
-//strLightItem_t _lightItem6 = {5, 33, 12}; //for RGB all value must be 0
-strLightItem_t _lightItem6 = {0, 0, 0};
-strLightLedRGBW_t _light3 = {3, "Szafka", {_lightItem3, _lightItem4, _lightItem5, _lightItem6}, MyMessage(3, V_RGB)}; //definicja led RGBW
+strLightItem_t _lightItem6 = {5, 33, 12};
+//strLightItem_t _lightItem6 = {0, 0, 0};  //for RGB all value must be 0
+strLightLedRGBW_t _light3 = {3, "Szafka", {_lightItem3, _lightItem4, _lightItem5, _lightItem6}, MyMessage(3, V_RGBW)}; //definicja led RGBW (V_RGBW - RGBW, V_RGB - RGB)
 
 /** Definition light list **/
 #define LIGHT_SIZE 3
@@ -200,6 +200,7 @@ void receive(const MyMessage &message)
           strLightItem_t &lightItem = light.lightItems[j];
           reciveLightDimmer(lightItem, message);
         }
+        send(light.myMessage.set(message.getBool()), true);
         return;
       }
       else if (message.type == type ? V_RGB : V_RGBW)
