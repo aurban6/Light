@@ -21,7 +21,7 @@
 #define SN "Light"
 #define SV "1.0"
 
-#define DEBUG
+//#define DEBUG
 
 #define FADE_DELAY 10 //10ms = 1s
 #define LED_TIMER_BIT 8
