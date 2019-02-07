@@ -461,7 +461,6 @@ void reciveLightRGBW(strLightLedRGBW_t &light)
     startFade(lightItem);
   }
   Serial.println();
-  //send(light.myMessage.set(light.rgbValue), true);
 }
 
 void setStatusButton(byte pin)
@@ -470,23 +469,33 @@ void setStatusButton(byte pin)
   {
     strButton_t &button = _buttons[i];
     byte size = button.lightsSize;
-      for (int j = 0; j < size; j++)
+    for (int j = 0; j < size; j++)
+    {
+      if (&button.lights[j] != nullptr)
       {
-        if (&button.lights[j] != nullptr)
+        strLight_t &light = button.lights[j];
+        strLightItem_t &lightItem = *light.lightItem;
+        if (lightItem.pin == pin)
         {
-          strLight_t &light = button.lights[j];
-          strLightItem_t &lightItem = *light.lightItem;
+          button.status = lightItem.status;
+        }
+      }
+      else if (&button.lightLeds[j] != nullptr)
+      {
+        strLightLedRGBW_t &light = button.lightLeds[j];
+        strLightItem_t &lightItem_3 = *light.lightItems[3];
+        byte type = lightItem_3.channel == 0 && lightItem_3.pin == 0;
+        byte size = type ? 3 : 4;
+        for (int j = 0; j < size; j++)
+        {
+          strLightItem_t &lightItem = *light.lightItems[j];
           if (lightItem.pin == pin)
           {
             button.status = lightItem.status;
-            saveLevelState(button.eepromPos, button.status);
           }
         }
-        else if (&button.lightLeds[j] != nullptr)
-        {
-          strLightLedRGBW_t &ligthLed = button.lightLeds[j];
-        }
       }
+    }
   }
 }
 
@@ -615,13 +624,22 @@ void switchButton()
         }
         else if (&button.lightLeds[j] != nullptr)
         {
-          strLightLedRGBW_t &ligthLed = button.lightLeds[j];
+          strLightLedRGBW_t &light = button.lightLeds[j];
 #ifdef DEBUG
           Serial.print("    ");
-          Serial.print(ligthLed.name);
+          Serial.print(light.name);
           Serial.print(", rgbValue=");
-          Serial.println(ligthLed.rgbValue);
+          Serial.println(light.rgbValue);
 #endif
+          strLightItem_t &lightItem_3 = *light.lightItems[3];
+          byte type = lightItem_3.channel == 0 && lightItem_3.pin == 0;
+          byte size = type ? 3 : 4;
+          for (int j = 0; j < size; j++)
+          {
+            strLightItem_t &lightItem = *light.lightItems[j];
+            reciveLightDimmer(lightItem, V_LIGHT, status);
+          }
+          send(light.myMessage.set(status), true);
         }
       }
       button.status = status;
