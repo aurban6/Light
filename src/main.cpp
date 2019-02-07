@@ -16,11 +16,12 @@
 #define MY_GATEWAY_MAX_CLIENTS 2
 
 #include <MySensors.h>
+#include <Bounce2.h>
 
 #define SN "Light"
 #define SV "1.0"
 
-//#define DEBUG
+#define DEBUG
 
 #define FADE_DELAY 10 //10ms = 1s
 #define LED_TIMER_BIT 8
@@ -58,6 +59,14 @@ typedef struct
   const char *rgbValue;
 } strLightLedRGBW_t;
 
+typedef struct
+{
+  const uint8_t pin;
+  const byte lightsSize;
+  strLight_t *lights;
+  strLightLedRGBW_t *lightLeds;
+} strButton_t;
+
 /** Definition light **/
 strLightItem_t _lightItem0 = {0, 13, 0};
 strLight_t _light0 = {0, "Wyspa", _lightItem0, 0, MyMessage(0, V_STATUS)}; //definicja klasycznej zarowki, wlacz/wylacz
@@ -67,7 +76,7 @@ strLightItem_t _lightItem1 = {0, 12, 2};
 strLight_t _light1 = {1, "Ogólne lewy", _lightItem1, 1, MyMessage(1, V_DIMMER)}; //definicja pojedynczego leda z sciemnianiem
 
 /** Definition led W **/
-strLightItem_t _lightItem2 = {1, 14, 4};
+strLightItem_t _lightItem2 = {1, 14, 4, 1};
 strLight_t _light2 = {2, "Ogólne prawy", _lightItem2, 1, MyMessage(2, V_DIMMER)}; //definicja pojedynczego leda z sciemnianiem
 
 /** Definition led RGBW **/
@@ -75,16 +84,41 @@ strLightItem_t _lightItem3 = {2, 27, 6};
 strLightItem_t _lightItem4 = {3, 26, 8};
 strLightItem_t _lightItem5 = {4, 25, 10};
 //strLightItem_t _lightItem6 = {5, 33, 12};
-strLightItem_t _lightItem6 = {0, 0, 0};  //for RGB all value must be 0
+strLightItem_t _lightItem6 = {0, 0, 0};                                                                               //for RGB all value must be 0
 strLightLedRGBW_t _light3 = {3, "Szafka", {_lightItem3, _lightItem4, _lightItem5, _lightItem6}, MyMessage(3, V_RGB)}; //definicja led RGBW (V_RGBW - RGBW, V_RGB - RGB)
 
 /** Definition light list **/
-#define LIGHT_SIZE 3
-strLight_t _lights[LIGHT_SIZE] = {_light0, _light1, _light2}; //lista oswietlenia typu pojedyncze (zarowki, led)
+// #define LIGHT_SIZE 3
+// strLight_t _lights[LIGHT_SIZE] = {_light0, _light1, _light2}; //lista oswietlenia typu pojedyncze (zarowki, led)
+
+#define LIGHT_SIZE 2
+strLight_t _lights[LIGHT_SIZE] = {_light0, _light1}; //lista oswietlenia typu pojedyncze (zarowki, led)
 
 /** Definition light RGBW list **/
 #define LIGHT_RGBW_SIZE 1
 strLightLedRGBW_t _lightRGBWs[LIGHT_RGBW_SIZE] = {_light3}; //lista oswietlenia typu RGB, RGBW
+
+/** Definition buttons and zones **/
+#define BUTTON_LIGHTS0_SIZE 1
+strLight_t _buttonLight0[BUTTON_LIGHTS0_SIZE] = {_light0};
+
+#define BUTTON_LIGHTS1_SIZE 1
+strLight_t _buttonLight1[BUTTON_LIGHTS1_SIZE] = {_light1};
+
+// #define BUTTON_LIGHTS1_SIZE 2
+// strLight_t _buttonLight1[BUTTON_LIGHTS1_SIZE] = {_light1, _light2};
+
+#define BUTTON_LIGHTS2_SIZE 1
+strLightLedRGBW_t _buttonLight2[BUTTON_LIGHTS2_SIZE] = {_light3};
+
+strButton_t _button0 = {4, BUTTON_LIGHTS0_SIZE, _buttonLight0, nullptr};
+strButton_t _button1 = {16, BUTTON_LIGHTS1_SIZE, _buttonLight1, nullptr};
+strButton_t _button2 = {17, BUTTON_LIGHTS2_SIZE, nullptr, _buttonLight2};
+
+#define BUTTON_SIZE 3
+strButton_t _buttons[BUTTON_SIZE] = {_button0, _button1, _button2};
+
+Bounce *bounces = new Bounce[BUTTON_SIZE];
 
 /** BODY **/
 void setupLight(strLight_t &light);
@@ -93,12 +127,13 @@ void setupLightRGBW(strLightLedRGBW_t &light);
 void presentationLight(strLight_t &light);
 void presentationLightRGBW(strLightLedRGBW_t &light);
 
-void reciveLightDimmer(strLightItem_t &lightItem, MyMessage message);
+void reciveLightDimmer(strLightItem_t &lightItem, uint8_t type, byte value);
 void reciveLightRGBW(strLightLedRGBW_t &light);
 
 void startFade(strLightItem_t &lightItem);
 void fadeStep();
 void fadeRGBWStep();
+void switchButton();
 
 byte fromhex(const char *str);
 int loadLevelState(byte pos);
@@ -119,6 +154,12 @@ void setup()
   for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
   {
     setupLightRGBW(_lightRGBWs[i]);
+  }
+  //setup for buttons
+  for (int i = 0; i < BUTTON_SIZE; i++)
+  {
+    bounces[i].attach(_buttons[i].pin, INPUT_PULLUP); //setup the bounce instance for the current button
+    bounces[i].interval(25);                          //interval in ms
   }
 }
 
@@ -160,7 +201,7 @@ void receive(const MyMessage &message)
       strLightItem_t &lightItem = light.lightItem;
       if (light.dimmer)
       {
-        reciveLightDimmer(lightItem, message);
+        reciveLightDimmer(lightItem, message.type, message.getByte());
         return;
       }
       else
@@ -198,7 +239,7 @@ void receive(const MyMessage &message)
         for (int j = 0; j < size; j++)
         {
           strLightItem_t &lightItem = light.lightItems[j];
-          reciveLightDimmer(lightItem, message);
+          reciveLightDimmer(lightItem, message.type, message.getByte());
         }
         send(light.myMessage.set(message.getBool()), true);
         return;
@@ -217,6 +258,7 @@ void loop()
 {
   fadeStep();
   fadeRGBWStep();
+  switchButton();
 }
 
 void setupLight(strLight_t &light)
@@ -317,29 +359,31 @@ void presentationLightRGBW(strLightLedRGBW_t &light)
   present(light.sensor, type ? S_RGB_LIGHT : S_RGBW_LIGHT, light.name);
 }
 
-void reciveLightDimmer(strLightItem_t &lightItem, MyMessage message)
+void reciveLightDimmer(strLightItem_t &lightItem, uint8_t type, byte value)
 {
-  if (message.type == V_LIGHT)
-  {
-    lightItem.fadeTo = message.getBool() ? loadLevelState(lightItem.eepromPos + 1) : 0;
-    lightItem.status = message.getBool();
-    saveLevelState(lightItem.eepromPos, lightItem.status);
-  }
-  else if (message.type == V_DIMMER)
-  {
-    lightItem.fadeTo = message.getByte();
-    saveLevelState(lightItem.eepromPos + 1, lightItem.fadeTo);
-  }
 #ifdef DEBUG
-  Serial.print("        Item: pin=");
+  Serial.print("        Before Item: pin=");
   Serial.print(lightItem.pin);
   Serial.print(", channel=");
   Serial.print(lightItem.channel);
   Serial.print(", status=");
   Serial.print(lightItem.status);
+  Serial.print(", dimValue=");
+  Serial.print(lightItem.dimValue);
   Serial.print(", fadeTo=");
   Serial.println(lightItem.fadeTo);
 #endif
+  if (type == V_LIGHT)
+  {
+    lightItem.fadeTo = value ? loadLevelState(lightItem.eepromPos + 1) : 0;
+    lightItem.status = value;
+    saveLevelState(lightItem.eepromPos, lightItem.status);
+  }
+  else if (type == V_DIMMER)
+  {
+    lightItem.fadeTo = value;
+    saveLevelState(lightItem.eepromPos + 1, lightItem.fadeTo);
+  }
   startFade(lightItem);
 }
 
@@ -375,7 +419,8 @@ void reciveLightRGBW(strLightLedRGBW_t &light)
     return;
   }
   byte start = 0;
-  if (strlen(light.rgbValue) == 9) start = 3;
+  if (strlen(light.rgbValue) == 9)
+    start = 3;
   byte size = light.lightItems[3].channel == 0 && light.lightItems[3].pin == 0 ? 3 : 4;
   for (int i = start; i < size; i++)
   {
@@ -397,6 +442,13 @@ void startFade(strLightItem_t &lightItem)
 {
   lightItem.fadeDelta = (lightItem.fadeTo - lightItem.dimValue) < 0 ? -1 : 1;
   lightItem.lastFadeStep = millis();
+// #ifdef DEBUG
+//   Serial.print("        -> startFade: ");
+//   Serial.print("fadeDelta=");
+//   Serial.print(lightItem.fadeDelta);
+//   Serial.print(", lastFadeStep=");
+//   Serial.println(lightItem.lastFadeStep);
+// #endif
 }
 
 void fadeStep()
@@ -414,10 +466,32 @@ void fadeStep()
         uint32_t duty = (lightItem.dimValue / 100. * 256);
         ledcWrite(lightItem.channel, duty);
         lightItem.lastFadeStep = currentTime;
-
+        // #ifdef DEBUG
+        //         Serial.print("        -> OK fadeStep: ");
+        //         Serial.print("channel=");
+        //         Serial.print(lightItem.channel);
+        //         Serial.print(", dimValue=");
+        //         Serial.print(lightItem.dimValue);
+        //         Serial.print(", fadeTo=");
+        //         Serial.print(lightItem.fadeTo);
+        //         Serial.print(", lastFadeStep=");
+        //         Serial.println(lightItem.lastFadeStep);
+        // #endif
         if (lightItem.fadeTo == lightItem.dimValue)
         {
           send(light.myMessage.set(lightItem.dimValue), true);
+#ifdef DEBUG
+          Serial.print("         After Item: pin=");
+          Serial.print(lightItem.pin);
+          Serial.print(", channel=");
+          Serial.print(lightItem.channel);
+          Serial.print(", status=");
+          Serial.print(lightItem.status);
+          Serial.print(", dimValue=");
+          Serial.print(lightItem.dimValue);
+          Serial.print(", fadeTo=");
+          Serial.println(lightItem.fadeTo);
+#endif
         }
       }
     }
@@ -439,6 +513,87 @@ void fadeRGBWStep()
         lightItem.dimValue += lightItem.fadeDelta;
         ledcWrite(lightItem.channel, lightItem.dimValue);
         lightItem.lastFadeStep = currentTime;
+      }
+    }
+  }
+}
+
+void switchButton()
+{
+  for (int i = 0; i < BUTTON_SIZE; i++)
+  {
+    bounces[i].update();
+    if (bounces[i].fell())
+    {
+      strButton_t &button = _buttons[i];
+      byte size = button.lightsSize;
+
+#ifdef DEBUG
+      Serial.println();
+      Serial.print("BUTTON");
+      Serial.print(": size=");
+      Serial.println(size);
+#endif
+
+      for (int j = 0; j < size; j++)
+      {
+        if (&button.lights[j] != nullptr)
+        {
+          strLight_t &light = button.lights[j];
+#ifdef DEBUG
+          Serial.print("    ");
+          Serial.print(light.name);
+          Serial.print(": sensor=");
+          Serial.print(light.sensor);
+          Serial.print(", dimmer=");
+          Serial.println(light.dimmer);
+#endif
+          strLightItem_t &lightItem = button.lights[j].lightItem;
+          if (light.dimmer)
+          {
+            byte value = !loadLevelState(lightItem.eepromPos);
+            reciveLightDimmer(lightItem, V_LIGHT, value);
+          }
+          else
+          {
+            lightItem.status = !loadLevelState(lightItem.eepromPos);
+#ifdef DEBUG
+            Serial.print("        Item: pin=");
+            Serial.print(lightItem.pin);
+            Serial.print(", status=");
+            Serial.println(lightItem.status);
+#endif
+            saveLevelState(lightItem.eepromPos, lightItem.status);
+            digitalWrite(lightItem.pin, lightItem.status ? RELAY_ON : RELAY_OFF);
+            send(light.myMessage.set(lightItem.status), true);
+          }
+        }
+        else if (&button.lightLeds[j] != nullptr)
+        {
+          strLightLedRGBW_t &ligthLed = button.lightLeds[j];
+#ifdef DEBUG
+          Serial.print("    ");
+          Serial.print(ligthLed.name);
+          Serial.print(", rgbValue=");
+          Serial.println(ligthLed.rgbValue);
+#endif
+        }
+
+        //         if (lightItem.channel > 0 && lightItem.pin > 0)
+        //         {
+        // #ifdef DEBUG
+        //           Serial.print("        Item: pin=");
+        //           Serial.print(lightItem.pin);
+        //           Serial.print(", channel=");
+        //           Serial.print(lightItem.channel);
+        //           Serial.print(", status=");
+        //           Serial.print(lightItem.status);
+        //           Serial.print(", fadeTo=");
+        //           Serial.print(lightItem.fadeTo);
+        //           Serial.print(", dimValue=");
+        //           Serial.println(lightItem.dimValue);
+        // #endif
+        //         }
       }
     }
   }
