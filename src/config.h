@@ -1,42 +1,35 @@
-#define FADE_DELAY 10 //10ms = 1s
-//#define DEBUG
+#define SN "Light"
+#define SV "2.0"
 
-strLightItem_t _lightItem0 = {0, 13, 0};
-strLight_t _light0 = {0, "Wyspa", &_lightItem0, 0, MyMessage(0, V_STATUS)}; //definicja klasycznej zarowki, wlacz/wylacz
+#define MY_WIFI_SSID "APCeramika2"
+#define MY_WIFI_PASSWORD "1qaz2wsx"
+#define MY_HOSTNAME "AquaLed"
 
-strLightItem_t _lightItem1 = {0, 12, 2};
-strLight_t _light1 = {1, "Ogólne lewy", &_lightItem1, 1, MyMessage(1, V_DIMMER)}; //definicja pojedynczego leda z sciemnianiem
+#define FADE_DELAY 10 //10 = 1s
+#define DEBUG
 
-strLightItem_t _lightItem2 = {1, 14, 4};
-strLight_t _light2 = {2, "Ogólne prawy", &_lightItem2, 1, MyMessage(2, V_DIMMER)}; //definicja pojedynczego leda z sciemnianiem
+/** Classic -> {pin, sensor, name} **/;
+strLight_t light1 = {15, 1, "Wyspa"};
 
-strLightItem_t _lightItem3 = {2, 27, 6};
-strLightItem_t _lightItem4 = {3, 26, 8};
-strLightItem_t _lightItem5 = {4, 25, 10};
-strLightItem_t _lightItem6 = {5, 33, 12};
-//strLightItem_t _lightItem6 = {0, 0, 0}; //for RGB all value must be 0
-strLightRGBW_t _light3 = {3, "Szafka", {&_lightItem3, &_lightItem4, &_lightItem5, &_lightItem6}, MyMessage(3, V_RGB)}; //definicja led RGBW (V_RGBW - RGBW, V_RGB - RGB)
+/** Dimmer -> {pin, sensor, channel, name}**/
+strLightDimmer_t light2 = {13, 2, 0, "Ogólne lewy"};
+strLightDimmer_t light3 = {12, 3, 1, "Ogólne prawy"};
+
+/** RGB -> {pin[3], sensor, channel[3], name}**/
+strLightRGB_t light4 = {{14, 27, 26}, 4, {2, 3, 4}, "Szafka RGB"};
+
+/** RGBW -> {pin[4], sensor, channel[4], name}**/
+strLightRGBW_t light5 = {{25, 33, 32, 34}, 5, {5, 6, 7, 8}, "Szafka RGBW"};
 
 
-#define LIGHT_SIZE 3
-strLight_t _lights[LIGHT_SIZE] = {_light0, _light1, _light2}; //lista oswietlenia typu pojedyncze (zarowki, led)
+#define LIGHT_SIZE 1
+strLight_t lights[LIGHT_SIZE] = {light1};
+
+#define LIGHT_DIMMER_SIZE 2
+strLightDimmer_t lightDimmers[LIGHT_DIMMER_SIZE] = {light2, light3};
+
+#define LIGHT_RGB_SIZE 1
+strLightRGB_t lightRGBs[LIGHT_RGB_SIZE] = {light4};
 
 #define LIGHT_RGBW_SIZE 1
-strLightRGBW_t _lightRGBWs[LIGHT_RGBW_SIZE] = {_light3}; //lista oswietlenia typu RGB, RGBW
-
-/** BUTTONS **/
-#define BUTTON_LIGHTS0_SIZE 1
-strLight_t _buttonLight0[BUTTON_LIGHTS0_SIZE] = {_light0};
-
-#define BUTTON_LIGHTS1_SIZE 2
-strLight_t _buttonLight1[BUTTON_LIGHTS1_SIZE] = {_light1, _light2};
-
-#define BUTTON_LIGHTS2_SIZE 1
-strLightRGBW_t _buttonLight2[BUTTON_LIGHTS2_SIZE] = {_light3};
-
-strButton_t _button0 = {4, BUTTON_LIGHTS0_SIZE, _buttonLight0, nullptr, 14};
-strButton_t _button1 = {5, BUTTON_LIGHTS1_SIZE, _buttonLight1, nullptr, 15};
-strButton_t _button2 = {16, BUTTON_LIGHTS2_SIZE, nullptr, _buttonLight2, 16};
-
-#define BUTTON_SIZE 3
-strButton_t _buttons[BUTTON_SIZE] = {_button0, _button1, _button2};
+strLightRGBW_t lightRGBWs[LIGHT_RGBW_SIZE] = {light5};
