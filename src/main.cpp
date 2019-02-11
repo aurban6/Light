@@ -1,142 +1,28 @@
-#include "Arduino.h"
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Update.h>
+#include <Bounce2.h>
 
 // Enable debug prints to serial monitor
 //#define MY_DEBUG
 
 #define MY_GATEWAY_ESP32
-#define MY_WIFI_SSID "APCeramika2"
-#define MY_WIFI_PASSWORD "1qaz2wsx"
-#define MY_HOSTNAME "AquaLed"
 #define MY_PORT 5003
 #define MY_GATEWAY_MAX_CLIENTS 2
 
-#include <MySensors.h>
-#include <Bounce2.h>
+#include "configMySensors.h"
+#include "main.h"
 
-#define SN "Light"
-#define SV "1.0"
-
-//#define DEBUG
-
-#define FADE_DELAY 10 //10ms = 1s
 #define LED_TIMER_BIT 8
 #define LED_BASE_FREQ 5000
 #define RELAY_ON 0
 #define RELAY_OFF 1
 
-typedef struct
-{
-  const uint8_t channel;
-  const uint8_t pin;
-  const uint8_t eepromPos;
-  bool status;
-  int fadeTo;
-  int fadeDelta;
-  int dimValue;
-  unsigned long lastFadeStep;
-} strLightItem_t;
-
-typedef struct
-{
-  const uint8_t sensor;
-  const char *name;
-  strLightItem_t *lightItem;
-  const bool dimmer;
-  MyMessage myMessage;
-} strLight_t;
-
-typedef struct
-{
-  const uint8_t sensor;
-  const char *name;
-  strLightItem_t *lightItems[4];
-  MyMessage myMessage;
-  const char *rgbValue;
-} strLightLedRGBW_t;
-
-typedef struct
-{
-  const uint8_t pin;
-  const byte lightsSize;
-  strLight_t *lights;
-  strLightLedRGBW_t *lightLeds;
-  bool status;
-  const uint8_t eepromPos;
-} strButton_t;
-
-/** Definition light **/
-strLightItem_t _lightItem0 = {0, 13, 0};
-strLight_t _light0 = {0, "Wyspa", &_lightItem0, 0, MyMessage(0, V_STATUS)}; //definicja klasycznej zarowki, wlacz/wylacz
-
-/** Definition led W **/
-strLightItem_t _lightItem1 = {0, 12, 2};
-strLight_t _light1 = {1, "Ogólne lewy", &_lightItem1, 1, MyMessage(1, V_DIMMER)}; //definicja pojedynczego leda z sciemnianiem
-
-/** Definition led W **/
-strLightItem_t _lightItem2 = {1, 14, 4};
-strLight_t _light2 = {2, "Ogólne prawy", &_lightItem2, 1, MyMessage(2, V_DIMMER)}; //definicja pojedynczego leda z sciemnianiem
-
-/** Definition led RGBW **/
-strLightItem_t _lightItem3 = {2, 27, 6};
-strLightItem_t _lightItem4 = {3, 26, 8};
-strLightItem_t _lightItem5 = {4, 25, 10};
-//strLightItem_t _lightItem6 = {5, 33, 12};
-strLightItem_t _lightItem6 = {0, 0, 0};                                                                                   //for RGB all value must be 0
-strLightLedRGBW_t _light3 = {3, "Szafka", {&_lightItem3, &_lightItem4, &_lightItem5, &_lightItem6}, MyMessage(3, V_RGB)}; //definicja led RGBW (V_RGBW - RGBW, V_RGB - RGB)
-
-/** Definition light list **/
-#define LIGHT_SIZE 3
-strLight_t _lights[LIGHT_SIZE] = {_light0, _light1, _light2}; //lista oswietlenia typu pojedyncze (zarowki, led)
-
-/** Definition light RGBW list **/
-#define LIGHT_RGBW_SIZE 1
-strLightLedRGBW_t _lightRGBWs[LIGHT_RGBW_SIZE] = {_light3}; //lista oswietlenia typu RGB, RGBW
-
-/** Definition buttons and zones **/
-#define BUTTON_LIGHTS0_SIZE 1
-strLight_t _buttonLight0[BUTTON_LIGHTS0_SIZE] = {_light0};
-
-#define BUTTON_LIGHTS1_SIZE 2
-strLight_t _buttonLight1[BUTTON_LIGHTS1_SIZE] = {_light1, _light2};
-
-#define BUTTON_LIGHTS2_SIZE 1
-strLightLedRGBW_t _buttonLight2[BUTTON_LIGHTS2_SIZE] = {_light3};
-
-strButton_t _button0 = {4, BUTTON_LIGHTS0_SIZE, _buttonLight0, nullptr, 14};
-strButton_t _button1 = {5, BUTTON_LIGHTS1_SIZE, _buttonLight1, nullptr, 15};
-strButton_t _button2 = {16, BUTTON_LIGHTS2_SIZE, nullptr, _buttonLight2, 16};
-
-#define BUTTON_SIZE 3
-strButton_t _buttons[BUTTON_SIZE] = {_button0, _button1, _button2};
+#include "config.h"
 
 Bounce *bounces = new Bounce[BUTTON_SIZE];
-
-/** BODY **/
-void setupLight(strLight_t &light);
-void setupLightRGBW(strLightLedRGBW_t &light);
-
-void presentationLight(strLight_t &light);
-void presentationLightRGBW(strLightLedRGBW_t &light);
-
-void reciveLight(strLight_t &light, byte value);
-void reciveLightDimmer(strLightItem_t &lightItem, uint8_t type, byte value);
-void reciveLightRGBW(strLightLedRGBW_t &light);
-
-void setStatusButton(byte pin);
-
-void startFade(strLightItem_t &lightItem);
-void fadeStep();
-void fadeRGBWStep();
-void switchButton();
-
-byte fromhex(const char *str);
-int loadLevelState(byte pos);
-void saveLevelState(byte pos, byte data);
 
 void setup()
 {
@@ -218,7 +104,7 @@ void receive(const MyMessage &message)
   //recive for RGB, RGBW Led
   for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
   {
-    strLightLedRGBW_t &light = _lightRGBWs[i];
+    strLightRGBW_t &light = _lightRGBWs[i];
     if (message.sensor == light.sensor)
     {
 #ifdef DEBUG
@@ -305,7 +191,7 @@ void setupLight(strLight_t &light)
   }
 }
 
-void setupLightRGBW(strLightLedRGBW_t &light)
+void setupLightRGBW(strLightRGBW_t &light)
 {
 #ifdef DEBUG
   Serial.print("    ");
@@ -349,7 +235,7 @@ void presentationLight(strLight_t &light)
   present(light.sensor, light.dimmer ? S_DIMMER : S_BINARY, light.name);
 }
 
-void presentationLightRGBW(strLightLedRGBW_t &light)
+void presentationLightRGBW(strLightRGBW_t &light)
 {
   strLightItem_t &lightItem_3 = *light.lightItems[3];
   byte type = lightItem_3.channel == 0 && lightItem_3.pin == 0;
@@ -411,7 +297,7 @@ void reciveLightDimmer(strLightItem_t &lightItem, uint8_t type, byte value)
   startFade(lightItem);
 }
 
-void reciveLightRGBW(strLightLedRGBW_t &light)
+void reciveLightRGBW(strLightRGBW_t &light)
 {
   byte target_values[4] = {0, 0, 0, 0};
 #ifdef DEBUG
@@ -482,7 +368,7 @@ void setStatusButton(byte pin)
       }
       else if (&button.lightLeds[j] != nullptr)
       {
-        strLightLedRGBW_t &light = button.lightLeds[j];
+        strLightRGBW_t &light = button.lightLeds[j];
         strLightItem_t &lightItem_3 = *light.lightItems[3];
         byte type = lightItem_3.channel == 0 && lightItem_3.pin == 0;
         byte size = type ? 3 : 4;
@@ -545,7 +431,7 @@ void fadeRGBWStep()
 {
   for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
   {
-    strLightLedRGBW_t &light = _lightRGBWs[i];
+    strLightRGBW_t &light = _lightRGBWs[i];
     strLightItem_t &lightItem_3 = *light.lightItems[3];
     byte size = lightItem_3.channel == 0 && lightItem_3.pin == 0 ? 3 : 4;
     for (int j = 0; j < size; j++)
@@ -624,7 +510,7 @@ void switchButton()
         }
         else if (&button.lightLeds[j] != nullptr)
         {
-          strLightLedRGBW_t &light = button.lightLeds[j];
+          strLightRGBW_t &light = button.lightLeds[j];
 #ifdef DEBUG
           Serial.print("    ");
           Serial.print(light.name);
