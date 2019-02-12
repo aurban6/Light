@@ -41,5 +41,12 @@ strButton_t button2 = {4, 7, 0, lightDimmers, 0, 0};
 strButton_t button3 = {5, 8, 0, 0, lightRGBs, 0};
 strButton_t button4 = {16, 9, 0, 0, 0, lightRGBWs};
 
+<<<<<<< HEAD
 #define BUTTON_SIZE 4
 strButton_t buttons[BUTTON_SIZE] = {button1, button2, button3, button4};
+=======
+#define BUTTON_SIZE 3
+strButton_t _buttons[BUTTON_SIZE] = {_button0, _button1, _button2};
+
+//oko
+>>>>>>> origin/master
