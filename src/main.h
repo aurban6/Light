@@ -59,6 +59,8 @@ void reciveLightDimmer(strLightDimmer_t &light, uint8_t type, byte value);
 void reciveLightRGB(strLightRGB_t &light, uint8_t type, const char *value);
 void reciveLightRGBW(strLightRGBW_t &light, uint8_t type, const char *value);
 
+void fadeStep();
+
 void startFadeDimmer(strLightDimmer_t &light);
 void startFadeRGB(strLightRGB_t &light);
 void startFadeRGBW(strLightRGBW_t &light);

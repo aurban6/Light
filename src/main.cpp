@@ -243,9 +243,6 @@ void reciveLightRGB(strLightRGB_t &light, uint8_t type, const char *value)
     }
   }
   startFadeRGB(light);
-
-  printHeader("After");
-  printLightRGB(light);
 }
 
 void reciveLightRGBW(strLightRGBW_t &light, uint8_t type, const char *value)
@@ -263,14 +260,71 @@ void reciveLightRGBW(strLightRGBW_t &light, uint8_t type, const char *value)
     }
     saveLevelState(light.sensor, 0, status);
   }
-  startFadeRGBW(light);
+  else
+  {
+    byte target_values[4] = {0, 0, 0, 0};
+    if (strlen(value) == 6)
+    {
+      target_values[0] = fromhex(&value[0]);
+      target_values[1] = fromhex(&value[2]);
+      target_values[2] = fromhex(&value[4]);
+      target_values[3] = 0;
+    }
+    else if (strlen(value) == 9)
+    {
+      target_values[0] = fromhex(&value[1]);
+      target_values[1] = fromhex(&value[3]);
+      target_values[2] = fromhex(&value[5]);
+      target_values[3] = fromhex(&value[7]);
+    }
+    else
+    {
+      return;
+    }
 
-  printHeader("After");
-  printLightRGBW(light);
+    byte sizeFrom = 0;
+    byte sizeTo = RGBW_SIZE - 1;
+    if (strlen(value) == 9)
+    {
+      sizeFrom = 3;
+      sizeTo = RGBW_SIZE;
+    }
+
+    for (int i = sizeFrom; i < sizeTo; i++)
+    {
+      light.fadeTo[i] = target_values[i];
+      saveLevelState(light.sensor, i + 1, target_values[i]);
+    }
+  }
+  startFadeRGBW(light);
 }
 
 void loop()
 {
+  fadeStep();
+}
+
+void fadeStep()
+{
+  for (int i = 0; i < LIGHT_DIMMER_SIZE; i++)
+  {
+    strLightDimmer_t &light = lightDimmers[i];
+    unsigned long currentTime = millis();
+    if (light.dimValue != light.fadeTo && currentTime > light.lastFadeStep + FADE_DELAY)
+    {
+      light.dimValue += light.fadeDelta;
+      uint32_t duty = (light.dimValue / 100. * 256);
+      ledcWrite(light.channel, duty);
+      light.lastFadeStep = currentTime;
+      if (light.fadeTo == light.dimValue)
+      {
+        send(MyMessage(light.sensor, V_DIMMER).set(light.dimValue), true);
+
+        printHeader("After");
+        printLightDimmer(light);
+      }
+    }
+  }
 }
 
 void startFadeDimmer(strLightDimmer_t &light)
