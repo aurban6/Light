@@ -67,8 +67,9 @@ void setupLightDimmer(strLightDimmer_t &light)
     light.dimValue = 0;
     light.fadeTo = 0;
   }
+
   printLightDimmer(light);
-  startFadeDimmer(light);
+  startFadeLightDimmer(light);
 }
 
 void setupLightRGB(strLightRGB_t &light)
@@ -86,7 +87,7 @@ void setupLightRGB(strLightRGB_t &light)
     }
   }
   printLightRGB(light);
-  startFadeRGB(light);
+  startFadeLightRGB(light);
 }
 
 void setupLightRGBW(strLightRGBW_t &light)
@@ -104,7 +105,7 @@ void setupLightRGBW(strLightRGBW_t &light)
     }
   }
   printLightRGBW(light);
-  startFadeRGBW(light);
+  startFadeLightRGBW(light);
 }
 
 void presentation()
@@ -202,13 +203,14 @@ void reciveLightDimmer(strLightDimmer_t &light, uint8_t type, byte value)
     light.status = value;
     light.fadeTo = value ? loadLevelState(light.sensor, 1) : 0;
     saveLevelState(light.sensor, 0, value);
+    send(MyMessage(light.sensor, V_STATUS).set(value), true);
   }
   else if (type == V_DIMMER)
   {
     light.fadeTo = value;
     saveLevelState(light.sensor, 1, value);
   }
-  startFadeDimmer(light);
+  startFadeLightDimmer(light);
 }
 
 void reciveLightRGB(strLightRGB_t &light, uint8_t type, const char *value)
@@ -226,7 +228,7 @@ void reciveLightRGB(strLightRGB_t &light, uint8_t type, const char *value)
     }
     saveLevelState(light.sensor, 0, status);
   }
-  else
+  else if (type == V_RGB)
   {
     if (strlen(value) != 6)
       return;
@@ -235,6 +237,7 @@ void reciveLightRGB(strLightRGB_t &light, uint8_t type, const char *value)
     target_values[0] = fromhex(&value[0]);
     target_values[1] = fromhex(&value[2]);
     target_values[2] = fromhex(&value[4]);
+    light.rgbValue = strdup(value);
 
     for (int i = 0; i < RGB_SIZE; i++)
     {
@@ -242,7 +245,7 @@ void reciveLightRGB(strLightRGB_t &light, uint8_t type, const char *value)
       saveLevelState(light.sensor, i + 1, target_values[i]);
     }
   }
-  startFadeRGB(light);
+  startFadeLightRGB(light);
 }
 
 void reciveLightRGBW(strLightRGBW_t &light, uint8_t type, const char *value)
@@ -260,31 +263,30 @@ void reciveLightRGBW(strLightRGBW_t &light, uint8_t type, const char *value)
     }
     saveLevelState(light.sensor, 0, status);
   }
-  else
+  else if (type == V_RGBW)
   {
     byte target_values[4] = {0, 0, 0, 0};
-    if (strlen(value) == 6)
-    {
-      target_values[0] = fromhex(&value[0]);
-      target_values[1] = fromhex(&value[2]);
-      target_values[2] = fromhex(&value[4]);
-      target_values[3] = 0;
-    }
-    else if (strlen(value) == 9)
+    bool isWhite = strlen(value) == 9;
+    if (isWhite)
     {
       target_values[0] = fromhex(&value[1]);
       target_values[1] = fromhex(&value[3]);
       target_values[2] = fromhex(&value[5]);
       target_values[3] = fromhex(&value[7]);
+      light.wValue = strdup(value);
     }
     else
     {
-      return;
+      target_values[0] = fromhex(&value[0]);
+      target_values[1] = fromhex(&value[2]);
+      target_values[2] = fromhex(&value[4]);
+      target_values[3] = 0;
+      light.rgbValue = strdup(value);
     }
 
     byte sizeFrom = 0;
     byte sizeTo = RGBW_SIZE - 1;
-    if (strlen(value) == 9)
+    if (isWhite)
     {
       sizeFrom = 3;
       sizeTo = RGBW_SIZE;
@@ -296,15 +298,17 @@ void reciveLightRGBW(strLightRGBW_t &light, uint8_t type, const char *value)
       saveLevelState(light.sensor, i + 1, target_values[i]);
     }
   }
-  startFadeRGBW(light);
+  startFadeLightRGBW(light);
 }
 
 void loop()
 {
-  fadeStep();
+  fadeLightDimmer();
+  fadeLightRGB();
+  fadeLightRGBW();
 }
 
-void fadeStep()
+void fadeLightDimmer()
 {
   for (int i = 0; i < LIGHT_DIMMER_SIZE; i++)
   {
@@ -327,13 +331,61 @@ void fadeStep()
   }
 }
 
-void startFadeDimmer(strLightDimmer_t &light)
+void fadeLightRGB()
+{
+  for (int i = 0; i < LIGHT_RGB_SIZE; i++)
+  {
+    strLightRGB_t &light = lightRGBs[i];
+    for (int j = 0; j < RGB_SIZE; j++)
+    {
+      unsigned long currentTime = millis();
+      if (light.dimValue[j] != light.fadeTo[j] && currentTime > light.lastFadeStep[j] + FADE_DELAY)
+      {
+        light.dimValue[j] += light.fadeDelta[j];
+        ledcWrite(light.channel[j], light.dimValue[j]);
+        light.lastFadeStep[j] = currentTime;
+
+        if (light.fadeTo[0] == light.dimValue[0] && light.fadeTo[1] == light.dimValue[1] && light.fadeTo[2] == light.dimValue[2])
+        {
+          printHeader("After");
+          printLightRGB(light);
+        }
+      }
+    }
+  }
+}
+
+void fadeLightRGBW()
+{
+  for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
+  {
+    strLightRGBW_t &light = lightRGBWs[i];
+    for (int j = 0; j < RGBW_SIZE; j++)
+    {
+      unsigned long currentTime = millis();
+      if (light.dimValue[j] != light.fadeTo[j] && currentTime > light.lastFadeStep[j] + FADE_DELAY)
+      {
+        light.dimValue[j] += light.fadeDelta[j];
+        ledcWrite(light.channel[j], light.dimValue[j]);
+        light.lastFadeStep[j] = currentTime;
+
+        if (light.fadeTo[0] == light.dimValue[0] && light.fadeTo[1] == light.dimValue[1] && light.fadeTo[2] == light.dimValue[2] && light.fadeTo[3] == light.dimValue[3])
+        {
+          printHeader("After");
+          printLightRGBW(light);
+        }
+      }
+    }
+  }
+}
+
+void startFadeLightDimmer(strLightDimmer_t &light)
 {
   light.fadeDelta = (light.fadeTo - light.dimValue) < 0 ? -1 : 1;
   light.lastFadeStep = millis();
 }
 
-void startFadeRGB(strLightRGB_t &light)
+void startFadeLightRGB(strLightRGB_t &light)
 {
   for (int i = 0; i < RGB_SIZE; i++)
   {
@@ -342,7 +394,7 @@ void startFadeRGB(strLightRGB_t &light)
   }
 }
 
-void startFadeRGBW(strLightRGBW_t &light)
+void startFadeLightRGBW(strLightRGBW_t &light)
 {
   for (int i = 0; i < RGBW_SIZE; i++)
   {
@@ -413,7 +465,9 @@ void printLightRGB(strLightRGB_t &light)
     Serial.print(", fadeTo=");
     Serial.print(light.fadeTo[i]);
     Serial.print(", dimValue=");
-    Serial.println(light.dimValue[i]);
+    Serial.print(light.dimValue[i]);
+    Serial.print(", rgbValue=");
+    Serial.println(light.rgbValue);
   }
 #endif
 }
@@ -437,7 +491,11 @@ void printLightRGBW(strLightRGBW_t &light)
     Serial.print(", fadeTo=");
     Serial.print(light.fadeTo[i]);
     Serial.print(", dimValue=");
-    Serial.println(light.dimValue[i]);
+    Serial.print(light.dimValue[i]);
+    Serial.print(", rgbValue=");
+    Serial.print(light.rgbValue);
+    Serial.print(", wValue=");
+    Serial.println(light.wValue);
   }
 #endif
 }

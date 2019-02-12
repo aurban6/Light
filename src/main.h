@@ -33,6 +33,7 @@ typedef struct
     int fadeDelta[RGB_SIZE];
     int dimValue[RGB_SIZE];
     unsigned long lastFadeStep[RGB_SIZE];
+    const char *rgbValue;
 } strLightRGB_t;
 
 #define RGBW_SIZE 4
@@ -47,6 +48,8 @@ typedef struct
     int fadeDelta[RGBW_SIZE];
     int dimValue[RGBW_SIZE];
     unsigned long lastFadeStep[RGBW_SIZE];
+    const char *rgbValue;
+    const char *wValue;
 } strLightRGBW_t;
 
 void setupLight(strLight_t &light);
@@ -59,11 +62,13 @@ void reciveLightDimmer(strLightDimmer_t &light, uint8_t type, byte value);
 void reciveLightRGB(strLightRGB_t &light, uint8_t type, const char *value);
 void reciveLightRGBW(strLightRGBW_t &light, uint8_t type, const char *value);
 
-void fadeStep();
+void fadeLightDimmer();
+void fadeLightRGB();
+void fadeLightRGBW();
 
-void startFadeDimmer(strLightDimmer_t &light);
-void startFadeRGB(strLightRGB_t &light);
-void startFadeRGBW(strLightRGBW_t &light);
+void startFadeLightDimmer(strLightDimmer_t &light);
+void startFadeLightRGB(strLightRGB_t &light);
+void startFadeLightRGBW(strLightRGBW_t &light);
 
 void printHeader(const char *name);
 void printLight(strLight_t &light);
