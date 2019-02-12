@@ -21,6 +21,8 @@
 #define RELAY_ON 0
 #define RELAY_OFF 1
 
+Bounce *bounces = new Bounce[BUTTON_SIZE];
+
 void setup()
 {
   printHeader("SETUP");
@@ -44,6 +46,8 @@ void setup()
   {
     setupLightRGBW(lightRGBWs[i]);
   }
+  //setup for buttons
+  setupButton();
 }
 
 void setupLight(strLight_t &light)
@@ -106,6 +110,17 @@ void setupLightRGBW(strLightRGBW_t &light)
   }
   printLightRGBW(light);
   startFadeLightRGBW(light);
+}
+
+void setupButton()
+{
+  for (int i = 0; i < BUTTON_SIZE; i++)
+  {
+    bounces[i].attach(buttons[i].pin, INPUT_PULLUP);
+    bounces[i].interval(25);
+    buttons[i].status = loadLevelState(buttons[i].sensor, 0);
+    printButton(buttons[i]);
+  }
 }
 
 void presentation()
@@ -306,6 +321,7 @@ void loop()
   fadeLightDimmer();
   fadeLightRGB();
   fadeLightRGBW();
+  switchButton();
 }
 
 void fadeLightDimmer()
@@ -375,6 +391,66 @@ void fadeLightRGBW()
           printLightRGBW(light);
         }
       }
+    }
+  }
+}
+
+void switchButton()
+{
+  for (int i = 0; i < BUTTON_SIZE; i++)
+  {
+    bounces[i].update();
+    if (bounces[i].fell())
+    {
+
+      strButton_t &button = buttons[i];
+
+      printHeader("Before");
+      printButton(button);
+      button.status = !button.status;
+      printHeader("After");
+      printButton(button);
+
+      if (button.lights != 0)
+      {
+        for (int j = 0; j < LIGHT_SIZE; j++)
+        {
+          strLight_t &light = button.lights[j];
+          reciveLight(light, LIGHT_SIZE == 1 ? getStatus(light.status, button.status) : button.status);
+        }
+      }
+
+      if (button.lightDimmers != 0)
+      {
+        for (int j = 0; j < LIGHT_DIMMER_SIZE; j++)
+        {
+          strLightDimmer_t &light = button.lightDimmers[j];
+          reciveLightDimmer(light, V_LIGHT, LIGHT_DIMMER_SIZE == 1 ? getStatus(light.status, button.status) : button.status);
+        }
+      }
+
+      if (button.lightRGBs != 0)
+      {
+        for (int j = 0; j < LIGHT_RGB_SIZE; j++)
+        {
+          strLightRGB_t &light = button.lightRGBs[j];
+          bool status = LIGHT_RGB_SIZE == 1 ? getStatus(light.status, button.status) : button.status;
+          reciveLightRGB(light, V_LIGHT, status ? "1" : "0");
+          send(MyMessage(light.sensor, V_RGB).set(status), true);
+        }
+      }
+
+      if (button.lightRGBWs != 0)
+      {
+        for (int j = 0; j < LIGHT_RGBW_SIZE; j++)
+        {
+          strLightRGBW_t &light = button.lightRGBWs[j];
+          bool status = LIGHT_RGB_SIZE == 1 ? getStatus(light.status, button.status) : button.status;
+          reciveLightRGBW(light, V_LIGHT, status ? "1" : "0");
+          send(MyMessage(light.sensor, V_RGBW).set(status), true);
+        }
+      }
+      saveLevelState(button.sensor, 0, button.status);
     }
   }
 }
@@ -498,6 +574,35 @@ void printLightRGBW(strLightRGBW_t &light)
     Serial.println(light.wValue);
   }
 #endif
+}
+
+void printButton(strButton_t &button)
+{
+#ifdef DEBUG
+  Serial.print("\t");
+  Serial.print("Button");
+  Serial.print("\t\t");
+  Serial.print("pin=");
+  Serial.print(button.pin);
+  Serial.print(", status=");
+  Serial.println(button.status);
+#endif
+}
+
+bool getStatus(bool status1, bool status2)
+{
+  if (status1 && status2)
+  {
+    return 0;
+  }
+  else if (!status1 && !status2)
+  {
+    return 1;
+  }
+  else
+  {
+    return status2;
+  }
 }
 
 byte fromhex(const char *str)
