@@ -40,3 +40,5 @@ strButton_t _button2 = {16, BUTTON_LIGHTS2_SIZE, nullptr, _buttonLight2, 16};
 
 #define BUTTON_SIZE 3
 strButton_t _buttons[BUTTON_SIZE] = {_button0, _button1, _button2};
+
+//oko
