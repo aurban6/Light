@@ -21,6 +21,7 @@ strLightRGB_t light4 = {{14, 27, 26}, 4, {2, 3, 4}, "Szafka RGB"};
 /** RGBW -> {pin[4], sensor, channel[4], name}**/
 strLightRGBW_t light5 = {{25, 33, 32, 34}, 5, {5, 6, 7, 8}, "Szafka RGBW"};
 
+
 #define LIGHT_SIZE 1
 strLight_t lights[LIGHT_SIZE] = {light1};
 
@@ -33,7 +34,6 @@ strLightRGB_t lightRGBs[LIGHT_RGB_SIZE] = {light4};
 #define LIGHT_RGBW_SIZE 1
 strLightRGBW_t lightRGBWs[LIGHT_RGBW_SIZE] = {light5};
 
-#define LIGHT_ZONE 1
 
 /** Button -> {pin, sensor, lights, lightDimmers, lightRGBs, lightRGBWs} **/
 strButton_t button1 = {2, 6, lights, 0, 0, 0};

@@ -21,32 +21,37 @@
 #define RELAY_ON 0
 #define RELAY_OFF 1
 
+#ifdef BUTTON_SIZE
 Bounce *bounces = new Bounce[BUTTON_SIZE];
+#endif
 
 void setup()
 {
   printHeader("SETUP");
-  //setup for light
+#ifdef LIGHT_SIZE
   for (int i = 0; i < LIGHT_SIZE; i++)
   {
     setupLight(lights[i]);
   }
-  //setup for light dimmer
+#endif
+#ifdef LIGHT_DIMMER_SIZE
   for (int i = 0; i < LIGHT_DIMMER_SIZE; i++)
   {
     setupLightDimmer(lightDimmers[i]);
   }
-  //setup for light RGB
+#endif
+#ifdef LIGHT_RGB_SIZE
   for (int i = 0; i < LIGHT_RGB_SIZE; i++)
   {
     setupLightRGB(lightRGBs[i]);
   }
-  //setup for light RGB
+#endif
+#ifdef LIGHT_RGBW_SIZE
   for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
   {
     setupLightRGBW(lightRGBWs[i]);
   }
-  //setup for buttons
+#endif
   setupButton();
 }
 
@@ -114,6 +119,7 @@ void setupLightRGBW(strLightRGBW_t &light)
 
 void setupButton()
 {
+#ifdef BUTTON_SIZE
   for (int i = 0; i < BUTTON_SIZE; i++)
   {
     bounces[i].attach(buttons[i].pin, INPUT_PULLUP);
@@ -121,38 +127,43 @@ void setupButton()
     buttons[i].status = loadLevelState(buttons[i].sensor, 0);
     printButton(buttons[i]);
   }
+#endif
 }
 
 void presentation()
 {
   printHeader("PRESENTATION");
-  //presentation for light
+#ifdef LIGHT_SIZE
   for (int i = 0; i < LIGHT_SIZE; i++)
   {
     present(lights[i].sensor, S_BINARY, lights[i].name);
   }
-  //presentation for light dimmer
+#endif
+#ifdef LIGHT_DIMMER_SIZE
   for (int i = 0; i < LIGHT_DIMMER_SIZE; i++)
   {
     present(lightDimmers[i].sensor, S_DIMMER, lightDimmers[i].name);
   }
-  //presentation for light RGB
+#endif
+#ifdef LIGHT_RGB_SIZE
   for (int i = 0; i < LIGHT_RGB_SIZE; i++)
   {
     present(lightRGBs[i].sensor, S_RGB_LIGHT, lightRGBs[i].name);
   }
-  //presentation for light RGB
+#endif
+#ifdef LIGHT_RGBW_SIZE
   for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
   {
     present(lightRGBWs[i].sensor, S_RGBW_LIGHT, lightRGBWs[i].name);
   }
+#endif
   sendSketchInfo(SN, SV);
 }
 
 void receive(const MyMessage &message)
 {
   printHeader("RECEIVE");
-  //receive for light
+#ifdef LIGHT_SIZE
   for (int i = 0; i < LIGHT_SIZE; i++)
   {
     strLight_t &light = lights[i];
@@ -162,7 +173,8 @@ void receive(const MyMessage &message)
       reciveLight(light, value);
     }
   }
-  //receive for light dimmer
+#endif
+#ifdef LIGHT_DIMMER_SIZE
   for (int i = 0; i < LIGHT_DIMMER_SIZE; i++)
   {
     strLightDimmer_t &light = lightDimmers[i];
@@ -172,7 +184,8 @@ void receive(const MyMessage &message)
       reciveLightDimmer(light, message.type, value);
     }
   }
-  //receive for light RGB
+#endif
+#ifdef LIGHT_RGB_SIZE
   for (int i = 0; i < LIGHT_RGB_SIZE; i++)
   {
     strLightRGB_t &light = lightRGBs[i];
@@ -182,7 +195,8 @@ void receive(const MyMessage &message)
       reciveLightRGB(light, message.type, value);
     }
   }
-  //receive for light RGBW
+#endif
+#ifdef LIGHT_RGBW_SIZE
   for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
   {
     strLightRGBW_t &light = lightRGBWs[i];
@@ -192,6 +206,7 @@ void receive(const MyMessage &message)
       reciveLightRGBW(light, message.type, value);
     }
   }
+#endif
 }
 
 void reciveLight(strLight_t &light, bool value)
@@ -326,6 +341,7 @@ void loop()
 
 void fadeLightDimmer()
 {
+#ifdef LIGHT_DIMMER_SIZE
   for (int i = 0; i < LIGHT_DIMMER_SIZE; i++)
   {
     strLightDimmer_t &light = lightDimmers[i];
@@ -345,10 +361,12 @@ void fadeLightDimmer()
       }
     }
   }
+#endif
 }
 
 void fadeLightRGB()
 {
+#ifdef LIGHT_RGB_SIZE
   for (int i = 0; i < LIGHT_RGB_SIZE; i++)
   {
     strLightRGB_t &light = lightRGBs[i];
@@ -369,10 +387,12 @@ void fadeLightRGB()
       }
     }
   }
+#endif
 }
 
 void fadeLightRGBW()
 {
+#ifdef LIGHT_RGBW_SIZE
   for (int i = 0; i < LIGHT_RGBW_SIZE; i++)
   {
     strLightRGBW_t &light = lightRGBWs[i];
@@ -393,10 +413,12 @@ void fadeLightRGBW()
       }
     }
   }
+#endif
 }
 
 void switchButton()
 {
+#ifdef BUTTON_SIZE
   for (int i = 0; i < BUTTON_SIZE; i++)
   {
     bounces[i].update();
@@ -411,6 +433,7 @@ void switchButton()
       printHeader("After");
       printButton(button);
 
+#ifdef LIGHT_SIZE
       if (button.lights != 0)
       {
         for (int j = 0; j < LIGHT_SIZE; j++)
@@ -419,7 +442,8 @@ void switchButton()
           reciveLight(light, LIGHT_SIZE == 1 ? getStatus(light.status, button.status) : button.status);
         }
       }
-
+#endif
+#ifdef LIGHT_DIMMER_SIZE
       if (button.lightDimmers != 0)
       {
         for (int j = 0; j < LIGHT_DIMMER_SIZE; j++)
@@ -428,7 +452,8 @@ void switchButton()
           reciveLightDimmer(light, V_LIGHT, LIGHT_DIMMER_SIZE == 1 ? getStatus(light.status, button.status) : button.status);
         }
       }
-
+#endif
+#ifdef LIGHT_RGB_SIZE
       if (button.lightRGBs != 0)
       {
         for (int j = 0; j < LIGHT_RGB_SIZE; j++)
@@ -439,20 +464,23 @@ void switchButton()
           send(MyMessage(light.sensor, V_RGB).set(status), true);
         }
       }
-
+#endif
+#ifdef LIGHT_RGBW_SIZE
       if (button.lightRGBWs != 0)
       {
         for (int j = 0; j < LIGHT_RGBW_SIZE; j++)
         {
           strLightRGBW_t &light = button.lightRGBWs[j];
-          bool status = LIGHT_RGB_SIZE == 1 ? getStatus(light.status, button.status) : button.status;
+          bool status = LIGHT_RGBW_SIZE == 1 ? getStatus(light.status, button.status) : button.status;
           reciveLightRGBW(light, V_LIGHT, status ? "1" : "0");
           send(MyMessage(light.sensor, V_RGBW).set(status), true);
         }
       }
+#endif
       saveLevelState(button.sensor, 0, button.status);
     }
   }
+#endif
 }
 
 void startFadeLightDimmer(strLightDimmer_t &light)
