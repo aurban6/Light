@@ -25,6 +25,12 @@
 Bounce *bounces = new Bounce[BUTTON_SIZE];
 #endif
 
+const char *host = MY_HOSTNAME;
+const char *ssid = MY_WIFI_SSID;
+const char *password = MY_WIFI_PASSWORD;
+
+WebServer server(80);
+
 void setup()
 {
   printHeader("SETUP");
@@ -53,6 +59,7 @@ void setup()
   }
 #endif
   setupButton();
+  setupWebServer();
 }
 
 void setupLight(strLight_t &light)
@@ -128,6 +135,59 @@ void setupButton()
     printButton(buttons[i]);
   }
 #endif
+}
+
+void setupWebServer()
+{
+  WiFi.begin(ssid, password);
+  Serial.println("");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  if (!MDNS.begin(host))
+  { //http://esp32.local
+    Serial.println("Error setting up MDNS responder!");
+    while (1)
+    {
+      delay(1000);
+    }
+  }
+  Serial.println("mDNS responder started");
+  server.on("/", HTTP_GET, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/html", serverIndex);
+  });
+  /*handling uploading firmware file */
+  server.on("/update", HTTP_POST, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+    ESP.restart(); }, []() {
+    HTTPUpload& upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      Serial.printf("Update: %s\n", upload.filename.c_str());
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      /* flashing firmware to ESP*/
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (Update.end(true)) { //true to set the size to the current progress
+        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+      } else {
+        Update.printError(Serial);
+      }
+    } });
+  server.begin();
 }
 
 void presentation()
@@ -337,6 +397,7 @@ void loop()
   fadeLightRGB();
   fadeLightRGBW();
   switchButton();
+  server.handleClient();
 }
 
 void fadeLightDimmer()

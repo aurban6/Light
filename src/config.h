@@ -1,12 +1,13 @@
 #define SN "Light"
-#define SV "2.0"
+#define SV "3.0"
 
 #define MY_WIFI_SSID "APCeramika2"
 #define MY_WIFI_PASSWORD "1qaz2wsx"
 #define MY_HOSTNAME "AquaLed"
 
 #define FADE_DELAY 10 //10 = 1s
-#define DEBUG
+//#define DEBUG
+
 
 /** Classic -> {pin, sensor, name} **/
 strLight_t light1 = {15, 1, "Wyspa"};
