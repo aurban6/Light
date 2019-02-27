@@ -1,9 +1,11 @@
+#include "struct.h"
+
 #define SN "Light"
 #define SV "3.0"
 
 #define MY_WIFI_SSID "APCeramika2"
 #define MY_WIFI_PASSWORD "1qaz2wsx"
-#define MY_HOSTNAME "AquaLed"
+#define MY_HOSTNAME "Light"
 
 #define FADE_DELAY 10 //10 = 1s
 //#define DEBUG

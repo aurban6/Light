@@ -5,7 +5,6 @@
 #include <Update.h>
 #include <Bounce2.h>
 #include "main.h"
-#include "config.h"
 
 // Enable debug prints to serial monitor
 //#define MY_DEBUG
